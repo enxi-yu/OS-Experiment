@@ -39,7 +39,6 @@ main(int argc, char *argv[])
     printf("Example 5:\n");
     memdump("sccccc", (char*) &example);
   } else if(argc == 2){
-    // format in argv[1], up to 512 bytes of data from standard input.
     char data[512];
     int n = 0;
     memset(data, '\0', sizeof(data));
@@ -57,57 +56,54 @@ main(int argc, char *argv[])
   exit(0);
 }
 
-void memdump(char *fmt, char *data)
+void
+memdump(char *fmt, char *data)
 {
-    char *ptr = data;  // 当前读取位置
-    int i;
-    
-    for (i = 0; fmt[i] != 0; i++) {
-        switch (fmt[i]) {
-            case 'i': {
-                // 读取 4 字节作为 32 位整数
-                int val = *(int *)ptr;
-                printf("%d\n", val);
-                ptr += 4;
-                break;
-            }
-            case 'p': {
-                // 读取 8 字节作为 64 位整数（十六进制）
-                long val = *(long *)ptr;
-                printf("%lx\n", val);
-                ptr += 8;
-                break;
-            }
-            case 'h': {
-                // 读取 2 字节作为 16 位整数
-                short val = *(short *)ptr;
-                printf("%d\n", val);
-                ptr += 2;
-                break;
-            }
-            case 'c': {
-                // 读取 1 字节作为 ASCII 字符
-                char val = *(char *)ptr;
-                printf("%c\n", val);
-                ptr += 1;
-                break;
-            }
-            case 's': {
-                // 读取 8 字节作为指针，然后打印指向的字符串
-                char *str_ptr = *(char **)ptr;
-                printf("%s\n", str_ptr);
-                ptr += 8;
-                break;
-            }
-            case 'S': {
-                // 打印剩余所有字节作为字符串（直到遇到 '\0'）
-                printf("%s\n", ptr);
-                // S 是最后一种格式，处理完就结束
-                return;
-            }
-            default:
-                // 忽略未知格式字符
-                break;
+  char *ptr = data;
+  int i;
+  
+  for (i = 0; fmt[i] != 0; i++) {
+    switch (fmt[i]) {
+      case 'i': {
+        int val = *(int *)ptr;
+        printf("%d\n", val);
+        ptr += 4;
+        break;
+      }
+      case 'p': {
+        unsigned long val = *(unsigned long *)ptr;
+        printf("%lx\n", val);
+        ptr += 8;
+        break;
+      }
+      case 'h': {
+        short val = *(short *)ptr;
+        printf("%d\n", val);
+        ptr += 2;
+        break;
+      }
+      case 'c': {
+        char val = *(char *)ptr;
+        printf("%c\n", val);
+        ptr += 1;
+        break;
+      }
+      case 's': {
+        char *str_ptr = *(char **)ptr;
+        if (str_ptr != 0) {
+          printf("%s\n", str_ptr);
         }
+        ptr += 8;
+        break;
+      }
+      case 'S': {
+        printf("%s\n", ptr);
+        return;
+      }
+      default: {
+        ptr += 1;
+        break;
+      }
     }
+  }
 }
