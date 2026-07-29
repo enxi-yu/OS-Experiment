@@ -1,0 +1,14 @@
+1. For every leaf page in the vmprint output, explain what it logically contains and what its permission bits are, and how it relates to the output of the earlier print_pgtbl() exercise above.
+   The low-address leaf entries correspond to the process's user pages, such as text, data, heap, and stack.
+   A text page is typically mapped with PTE_V, PTE_R, PTE_X, and PTE_U.
+   A writable data, heap, or stack page is typically mapped with PTE_V, PTE_R, PTE_W, and PTE_U.
+
+   Near the top of the address space, the USYSCALL page contains the shared struct usyscall and is mapped read-only for user space, so it uses PTE_V, PTE_R, and PTE_U.
+   The TRAPFRAME page contains saved register state for traps and returns, and it is mapped with kernel read/write permissions.
+   The TRAMPOLINE page contains trampoline code, so it is mapped with PTE_V, PTE_R, and PTE_X.
+
+   This matches the earlier print_pgtbl() exercise: that output showed selected virtual pages and their PTE bits, while vmprint shows the same mappings organized as a three-level page-table tree, including intermediate page-table pages.
+
+2. Which other xv6 system call(s) could be made faster using this shared page? Explain how.
+   Read-mostly system calls such as getppid() or uptime() could be made faster this way.
+   The kernel could keep small pieces of frequently read state in a read-only shared page that is updated by the kernel and read directly by user code, avoiding a trap into the kernel for every call.

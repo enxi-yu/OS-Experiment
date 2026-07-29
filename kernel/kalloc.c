@@ -21,6 +21,9 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
+#ifdef LAB_PGTBL
+  struct run *superfreelist;
+#endif
 } kmem;
 
 void
@@ -80,3 +83,49 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+#ifdef LAB_PGTBL
+void *
+superalloc(void)
+{
+  struct run *prev, *start, *cur, *after;
+  int i;
+
+  acquire(&kmem.lock);
+  prev = 0;
+  for(start = kmem.freelist; start; prev = start, start = start->next){
+    cur = start;
+    for(i = 1; i < SUPERPGSIZE / PGSIZE; i++){
+      if(cur->next == 0 || (uint64)cur->next != (uint64)cur - PGSIZE)
+        break;
+      cur = cur->next;
+    }
+    if(i == SUPERPGSIZE / PGSIZE){
+      uint64 base = (uint64)cur;
+      if(base % SUPERPGSIZE != 0)
+        continue;
+      after = cur->next;
+      if(prev)
+        prev->next = after;
+      else
+        kmem.freelist = after;
+      release(&kmem.lock);
+      memset((void*)base, 5, SUPERPGSIZE);
+      return (void*)base;
+    }
+  }
+  release(&kmem.lock);
+  return 0;
+}
+
+void
+superfree(void *pa)
+{
+  char *p = (char*)pa;
+
+  if(((uint64)pa % SUPERPGSIZE) != 0 || p < end || (uint64)pa + SUPERPGSIZE > PHYSTOP)
+    panic("superfree");
+  for(; p < (char*)pa + SUPERPGSIZE; p += PGSIZE)
+    kfree(p);
+}
+#endif
