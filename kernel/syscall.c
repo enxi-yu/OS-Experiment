@@ -94,6 +94,7 @@ extern uint64 sys_getpid(void);
 extern uint64 sys_sbrk(void);
 extern uint64 sys_pause(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_interpose(void);
 extern uint64 sys_open(void);
 extern uint64 sys_write(void);
 extern uint64 sys_mknod(void);
@@ -116,6 +117,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_chdir]   sys_chdir,
 [SYS_dup]     sys_dup,
 [SYS_getpid]  sys_getpid,
+[SYS_interpose] sys_interpose,
 [SYS_sbrk]    sys_sbrk,
 [SYS_pause]   sys_pause,
 [SYS_uptime]  sys_uptime,
@@ -128,6 +130,22 @@ static uint64 (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 };
 
+int
+interpose_allowed(struct proc *p, int num)
+{
+  char path[MAXPATH];
+
+  if(p->interpose_mask == 0)
+    return 1;
+  if((p->interpose_mask & (1 << num)) == 0)
+    return 1;
+  if(num != SYS_open && num != SYS_exec)
+    return 0;
+  if(argstr(0, path, sizeof(path)) < 0)
+    return 0;
+  return strncmp(path, p->interpose_path, MAXPATH) == 0;
+}
+
 void
 syscall(void)
 {
@@ -136,6 +154,10 @@ syscall(void)
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    if(!interpose_allowed(p, num)) {
+      p->trapframe->a0 = -1;
+      return;
+    }
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
     p->trapframe->a0 = syscalls[num]();

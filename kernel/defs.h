@@ -134,6 +134,7 @@ int             argstr(int, char*, int);
 void            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
+int             interpose_allowed(struct proc *, int);
 void            syscall();
 
 // trap.c

@@ -1,0 +1,26 @@
+1. Looking at the backtrace output, which function called syscall?
+   usertrap() called syscall().
+
+2. What is the value of p->trapframe->a7 and what does that value represent?
+   The value is 15, which represents SYS_open.
+   The first user program is init, and it first calls open("console", O_RDWR).
+   In xv6, register a7 holds the system call number before ecall.
+
+3. What was the previous mode that the CPU was in?
+   User mode.
+   The trap came from a user-space ecall, so the SPP bit in sstatus is 0.
+
+4. Write down the assembly instruction the kernel is panicking at. Which register corresponds to the variable num?
+   The panic happens at the instruction generated from:
+     num = *(int *)0;
+   That is a load from virtual address 0, for example:
+     lw a5, 0(zero)
+   In that case, register a5 corresponds to the variable num.
+
+5. Why does the kernel crash?
+   The kernel crashes because it dereferences address 0 inside kernel mode.
+   Virtual address 0 is not mapped in the kernel address space, so the load causes a page fault.
+   The scause value confirms that this is a load page fault.
+
+6. What is the name of the process that was running when the kernel panicked? What is its process id (pid)?
+   The process is init, and its pid is 1.

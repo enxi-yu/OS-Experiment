@@ -103,5 +103,7 @@ struct proc {
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
+  int interpose_mask;          // Blocked syscall bitmask
+  char interpose_path[MAXPATH];// Allowed pathname for masked open/exec
   char name[16];               // Process name (debugging)
 };
