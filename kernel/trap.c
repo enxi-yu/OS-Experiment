@@ -44,7 +44,7 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
+  w_stvec((uint64)kernelvec);  //DOC: kernelvec
 
   struct proc *p = myproc();
   
@@ -79,6 +79,7 @@ usertrap(void)
 
   if(killed(p))
     kexit(-1);
+
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
@@ -197,7 +198,13 @@ devintr()
       uartintr();
     } else if(irq == VIRTIO0_IRQ){
       virtio_disk_intr();
-    } else if(irq){
+    }
+#ifdef LAB_NET
+    else if(irq == E1000_IRQ){
+      e1000_intr();
+    }
+#endif
+    else if(irq){
       printf("unexpected interrupt irq=%d\n", irq);
     }
 
