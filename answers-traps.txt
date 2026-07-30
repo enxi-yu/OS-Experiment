@@ -1,0 +1,13 @@
+1. Function arguments are passed in registers `a0` through `a7`. In `main`'s call to `printf`, the value `13` is in `a2`.
+
+2. There is no call to `f` in `main`, and there is no call to `g` either. The compiler inlined/optimized them away, so `f(8)+1` became the constant `12`, which is loaded directly into `a1`.
+
+3. `printf` is located at address `0x0000000000000706`.
+
+4. Just after the `jalr`/`jal` to `printf` in `main`, `ra` contains the return address of the next instruction, which is `0x0000000000000034`.
+
+5. The code prints `He110 World`.
+
+6. If RISC-V were big-endian, set `i` to `0x726c6400` to get the same output. You would not need to change `57616`.
+
+7. After `y=` it prints an unpredictable garbage value. This happens because the format string asks for two `%d` arguments, but only one argument (`3`) is actually passed, so `printf` reads whatever bits happen to be in the next argument location.

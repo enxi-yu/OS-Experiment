@@ -17,6 +17,13 @@ void kernelvec();
 extern int devintr();
 
 void
+restore_alarm_trapframe(struct proc *p)
+{
+  memmove(p->trapframe, &p->alarm_trapframe, sizeof(struct trapframe));
+  p->inalarm = 0;
+}
+
+void
 trapinit(void)
 {
   initlock(&tickslock, "time");
@@ -44,7 +51,7 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
+  w_stvec((uint64)kernelvec);  //DOC: kernelvec
 
   struct proc *p = myproc();
   
@@ -79,6 +86,18 @@ usertrap(void)
 
   if(killed(p))
     kexit(-1);
+
+  if(which_dev == 2 && p->alarmticks > 0){
+    if(p->inalarm == 0){
+      p->alarmelapsed++;
+      if(p->alarmelapsed >= p->alarmticks){
+        p->alarmelapsed = 0;
+        p->inalarm = 1;
+        memmove(&p->alarm_trapframe, p->trapframe, sizeof(struct trapframe));
+        p->trapframe->epc = p->alarmhandler;
+      }
+    }
+  }
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
@@ -216,4 +235,3 @@ devintr()
     return 0;
   }
 }
-
