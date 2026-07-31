@@ -154,8 +154,12 @@ end_op(void)
   if(log.committing)
     panic("log.committing");
   if(log.outstanding == 0){
-    do_commit = 1;
-    log.committing = 1;
+    if(log.lh.n >= LOGBLOCKS - MAXOPBLOCKS){
+      do_commit = 1;
+      log.committing = 1;
+    } else {
+      wakeup(&log);
+    }
   } else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
@@ -234,4 +238,3 @@ log_write(struct buf *b)
   }
   release(&log.lock);
 }
-
