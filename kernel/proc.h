@@ -27,6 +27,7 @@ struct cpu {
 };
 
 extern struct cpu cpus[NCPU];
+struct file;
 
 // per-process data for the trap handling code in trampoline.S.
 // sits in a page by itself just under the trampoline page in the
@@ -81,6 +82,19 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+#ifdef LAB_MMAP
+#define NVMA 16
+struct vma {
+  int used;
+  uint64 addr;
+  uint64 len;
+  int prot;
+  int flags;
+  uint64 offset;
+  struct file *f;
+};
+#endif
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -104,4 +118,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+#ifdef LAB_MMAP
+  uint64 mmapbase;             // next mmap allocation grows downward
+  struct vma vmas[NVMA];
+#endif
 };

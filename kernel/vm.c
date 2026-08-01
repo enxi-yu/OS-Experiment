@@ -7,6 +7,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "fs.h"
+#include "file.h"
+#include "fcntl.h"
 
 /*
  * the kernel's page table.
@@ -456,7 +458,7 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
   struct proc *p = myproc();
 
   if (va >= p->sz)
-    return 0;
+    goto mmap_fault;
   va = PGROUNDDOWN(va);
   if(ismapped(pagetable, va)) {
     return 0;
@@ -470,6 +472,61 @@ vmfault(pagetable_t pagetable, uint64 va, int read)
     return 0;
   }
   return mem;
+
+mmap_fault:
+#ifdef LAB_MMAP
+  va = PGROUNDDOWN(va);
+  for(int i = 0; i < NVMA; i++){
+    struct vma *v = &p->vmas[i];
+    int perm = PTE_U;
+    uint64 fileoff;
+    uint n;
+
+    if(!v->used)
+      continue;
+    if(va < v->addr || va >= v->addr + v->len)
+      continue;
+    if(read){
+      if((v->prot & PROT_READ) == 0)
+        return 0;
+    } else {
+      if((v->prot & PROT_WRITE) == 0)
+        return 0;
+    }
+
+    mem = (uint64)kalloc();
+    if(mem == 0)
+      return 0;
+    memset((void*)mem, 0, PGSIZE);
+
+    fileoff = v->offset + (va - v->addr);
+    ilock(v->f->ip);
+    if(fileoff < v->f->ip->size){
+      n = v->f->ip->size - fileoff;
+      if(n > PGSIZE)
+        n = PGSIZE;
+      if(readi(v->f->ip, 0, mem, fileoff, n) != n){
+        iunlock(v->f->ip);
+        kfree((void*)mem);
+        return 0;
+      }
+    }
+    iunlock(v->f->ip);
+
+    if(v->prot & PROT_READ)
+      perm |= PTE_R;
+    if(v->prot & PROT_WRITE)
+      perm |= PTE_W;
+    if(v->prot & PROT_EXEC)
+      perm |= PTE_X;
+    if(mappages(pagetable, va, PGSIZE, mem, perm) != 0){
+      kfree((void*)mem);
+      return 0;
+    }
+    return mem;
+  }
+#endif
+  return 0;
 }
 
 int

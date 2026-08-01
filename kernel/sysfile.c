@@ -386,6 +386,73 @@ sys_mkdir(void)
   return 0;
 }
 
+#ifdef LAB_MMAP
+uint64
+sys_mmap(void)
+{
+  uint64 addr, len, offset, mapaddr;
+  int prot, flags;
+  struct file *f;
+  struct proc *p = myproc();
+  struct vma *v = 0;
+
+  argaddr(0, &addr);
+  argaddr(1, &len);
+  argint(2, &prot);
+  argint(3, &flags);
+  argaddr(5, &offset);
+
+  if(argfd(4, 0, &f) < 0)
+    return -1;
+
+  if(addr != 0 || offset != 0 || len == 0)
+    return -1;
+  if(f->type != FD_INODE)
+    return -1;
+  if((flags != MAP_SHARED) && (flags != MAP_PRIVATE))
+    return -1;
+  if((prot & PROT_READ) && !f->readable)
+    return -1;
+  if((flags & MAP_SHARED) && (prot & PROT_WRITE) && !f->writable)
+    return -1;
+
+  len = PGROUNDUP(len);
+  for(int i = 0; i < NVMA; i++){
+    if(!p->vmas[i].used){
+      v = &p->vmas[i];
+      break;
+    }
+  }
+  if(v == 0)
+    return -1;
+  if(p->mmapbase < len || p->mmapbase - len < p->sz)
+    return -1;
+
+  mapaddr = p->mmapbase - len;
+  p->mmapbase = mapaddr;
+
+  v->used = 1;
+  v->addr = mapaddr;
+  v->len = len;
+  v->prot = prot;
+  v->flags = flags;
+  v->offset = offset;
+  v->f = filedup(f);
+
+  return mapaddr;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr, len;
+
+  argaddr(0, &addr);
+  argaddr(1, &len);
+  return proc_munmap(myproc(), addr, len);
+}
+#endif
+
 uint64
 sys_mknod(void)
 {

@@ -5,6 +5,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "file.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -124,6 +126,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+#ifdef LAB_MMAP
+  p->mmapbase = TRAPFRAME;
+  memset(p->vmas, 0, sizeof(p->vmas));
+#endif
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -155,6 +161,9 @@ found:
 static void
 freeproc(struct proc *p)
 {
+#ifdef LAB_MMAP
+  proc_freevmas(p);
+#endif
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -241,6 +250,10 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+#ifdef LAB_MMAP
+    if(sz + n >= p->mmapbase)
+      return -1;
+#endif
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
@@ -272,6 +285,14 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+#ifdef LAB_MMAP
+  np->mmapbase = p->mmapbase;
+  for(i = 0; i < NVMA; i++){
+    np->vmas[i] = p->vmas[i];
+    if(np->vmas[i].used && np->vmas[i].f)
+      np->vmas[i].f = filedup(np->vmas[i].f);
+  }
+#endif
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -338,6 +359,9 @@ kexit(int status)
   }
 
   begin_op();
+#ifdef LAB_MMAP
+  proc_freevmas(p);
+#endif
   iput(p->cwd);
   end_op();
   p->cwd = 0;
@@ -685,3 +709,87 @@ procdump(void)
     printf("\n");
   }
 }
+
+#ifdef LAB_MMAP
+int
+proc_munmap(struct proc *p, uint64 addr, uint64 len)
+{
+  struct vma *v = 0;
+  uint64 end;
+  int i;
+
+  if((addr % PGSIZE) != 0 || len == 0)
+    return -1;
+  len = PGROUNDUP(len);
+
+  for(i = 0; i < NVMA; i++){
+    if(!p->vmas[i].used)
+      continue;
+    if(addr >= p->vmas[i].addr && addr < p->vmas[i].addr + p->vmas[i].len){
+      v = &p->vmas[i];
+      break;
+    }
+  }
+  if(v == 0)
+    return -1;
+
+  end = v->addr + v->len;
+  if(addr + len > end)
+    return -1;
+  if(addr != v->addr && addr + len != end)
+    return -1;
+
+  begin_op();
+  for(uint64 a = addr; a < addr + len; a += PGSIZE){
+    pte_t *pte = walk(p->pagetable, a, 0);
+    if(pte == 0 || (*pte & PTE_V) == 0)
+      continue;
+    if((v->flags & MAP_SHARED) && (v->prot & PROT_WRITE) &&
+       v->f && v->f->type == FD_INODE){
+      uint64 fileoff = v->offset + (a - v->addr);
+      uint64 pa = PTE2PA(*pte);
+      uint n;
+
+      ilock(v->f->ip);
+      if(fileoff < v->f->ip->size){
+        n = v->f->ip->size - fileoff;
+        if(n > PGSIZE)
+          n = PGSIZE;
+        if(writei(v->f->ip, 0, pa, fileoff, n) != n){
+          iunlock(v->f->ip);
+          end_op();
+          return -1;
+        }
+      }
+      iunlock(v->f->ip);
+    }
+    uvmunmap(p->pagetable, a, 1, 1);
+  }
+  end_op();
+
+  if(addr == v->addr && len == v->len){
+    struct file *f = v->f;
+    memset(v, 0, sizeof(*v));
+    if(f)
+      fileclose(f);
+  } else if(addr == v->addr){
+    v->addr += len;
+    v->offset += len;
+    v->len -= len;
+  } else {
+    v->len -= len;
+  }
+
+  return 0;
+}
+
+void
+proc_freevmas(struct proc *p)
+{
+  for(int i = 0; i < NVMA; i++){
+    if(p->vmas[i].used)
+      proc_munmap(p, p->vmas[i].addr, p->vmas[i].len);
+  }
+  p->mmapbase = TRAPFRAME;
+}
+#endif
